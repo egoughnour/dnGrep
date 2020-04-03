@@ -141,6 +141,22 @@ namespace dnGREP.WPF
             }
         }
 
+        RelayCommand _cloneCommand;
+        public ICommand CloneCommand
+		{
+			get
+			{
+                if(_cloneCommand == null)
+				{
+                    _cloneCommand = new RelayCommand(
+                         param => Clone(),
+                         param => SelectedBookmark != null
+                        );
+				}
+                return _cloneCommand;
+			}
+		}
+
         RelayCommand _editCommand;
         public ICommand EditCommand
         {
