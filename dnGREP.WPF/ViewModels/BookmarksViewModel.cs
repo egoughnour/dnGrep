@@ -157,6 +157,54 @@ namespace dnGREP.WPF
 			}
 		}
 
+        private void Clone()
+        {
+            if (SelectedBookmark != null)
+            {
+                // edit a copy
+                var editBmk = new BookmarkViewModel(SelectedBookmark, isClone:true);
+               
+                    var bmk = BookmarkLibrary.Instance.Find(SelectedBookmark.SearchFor, SelectedBookmark.ReplaceWith, SelectedBookmark.FilePattern);
+                    if (bmk != null)
+                    {
+                        BookmarkLibrary.Instance.Bookmarks.Remove(bmk);
+                        Bookmarks.Remove(SelectedBookmark);
+                    }
+
+                    var newBmk = new Bookmark(editBmk.SearchFor, editBmk.ReplaceWith, editBmk.FilePattern)
+                    {
+                        Description = editBmk.Description,
+                        IgnoreFilePattern = editBmk.IgnoreFilePattern,
+                        TypeOfFileSearch = editBmk.TypeOfFileSearch,
+                        TypeOfSearch = editBmk.TypeOfSearch,
+                        CaseSensitive = editBmk.CaseSensitive,
+                        WholeWord = editBmk.WholeWord,
+                        Multiline = editBmk.Multiline,
+                        Singleline = editBmk.Singleline,
+                        BooleanOperators = editBmk.BooleanOperators,
+                        IncludeSubfolders = editBmk.IncludeSubfolders,
+                        MaxSubfolderDepth = editBmk.MaxSubfolderDepth,
+                        IncludeHiddenFiles = editBmk.IncludeHidden,
+                        IncludeBinaryFiles = editBmk.IncludeBinary,
+                        UseGitignore = editBmk.UseGitignore,
+                        IncludeArchive = editBmk.IncludeArchive,
+                        CodePage = editBmk.CodePage
+                    };
+                    string[] paths = editBmk.PathReferences.Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    newBmk.FolderReferences.AddRange(paths);
+                    
+                    if (editBmk.Parameters.Any())
+                    {
+                        newBmk.Parameters.AddRange(editBmk.Parameters);
+                    }
+
+                    BookmarkLibrary.Instance.Bookmarks.Add(newBmk);
+                    BookmarkLibrary.Save();
+                    Bookmarks.AddNewItem(editBmk);
+                    SelectedBookmark = editBmk;
+                }
+            }
+
         RelayCommand _editCommand;
         public ICommand EditCommand
         {
@@ -320,6 +368,7 @@ namespace dnGREP.WPF
             ReplaceWith = bk.ReplacePattern;
 
             HasExtendedProperties = bk.Version > 1;
+            HasParameters = bk.Version > 2;
 
             TypeOfSearch = bk.TypeOfSearch;
             CaseSensitive = bk.CaseSensitive;
@@ -338,6 +387,8 @@ namespace dnGREP.WPF
             IncludeArchive = bk.IncludeArchive;
             CodePage = bk.CodePage;
             PathReferences = string.Join(Environment.NewLine, bk.FolderReferences);
+            Parameters = bk.Parameters;
+            CloneIndex = bk.CloneIndex;
 
             UpdateTypeOfSearchState();
 
@@ -345,7 +396,7 @@ namespace dnGREP.WPF
             DialogFontSize = GrepSettings.Instance.Get<double>(GrepSettings.Key.DialogFontSize);
         }
 
-        public BookmarkViewModel(BookmarkViewModel toCopy)
+        public BookmarkViewModel(BookmarkViewModel toCopy, bool isClone = false)
         {
             HasExtendedProperties = true;
             IsEverythingAvailable = EverythingSearch.IsAvailable;
@@ -384,8 +435,17 @@ namespace dnGREP.WPF
             BooleanOperators = toCopy.BooleanOperators;
             IsBooleanOperatorsEnabled = toCopy.IsBooleanOperatorsEnabled;
 
+            Parameters = toCopy.Parameters;
+            IsParametersEnabled = toCopy.IsParametersEnabled;
+
+            if (isClone)
+            {
+                CloneIndex = CloneIndex + 1;
+            }
+
             ApplicationFontFamily = GrepSettings.Instance.Get<string>(GrepSettings.Key.ApplicationFontFamily);
             DialogFontSize = GrepSettings.Instance.Get<double>(GrepSettings.Key.DialogFontSize);
+
         }
 
         private void UpdateTypeOfSearchState()
@@ -395,6 +455,7 @@ namespace dnGREP.WPF
             IsSinglelineEnabled = true;
             IsWholeWordEnabled = true;
             IsBooleanOperatorsEnabled = true;
+            IsParametersEnabled = true;
 
             if (TypeOfSearch == SearchType.XPath)
             {
@@ -465,6 +526,20 @@ namespace dnGREP.WPF
 
                 hasExtendedProperties = value;
                 OnPropertyChanged("HasExtendedProperties");
+            }
+        }
+
+        private bool hasParameters = false;
+        public bool HasParameters
+        {
+            get { return hasParameters; }
+            set
+            {
+                if (hasParameters == value)
+                    return;
+
+                hasParameters = value;
+                OnPropertyChanged("HasParameters");
             }
         }
 
@@ -845,6 +920,13 @@ namespace dnGREP.WPF
             }
         }
 
+        protected override void AnyPropertyChange()
+        {
+            CloneIndex = 0;
+        }
+
+        public int CloneIndex { get; set; }
+
         private bool isEverythingAvailable;
         public bool IsEverythingAvailable
         {
@@ -857,6 +939,35 @@ namespace dnGREP.WPF
                 isEverythingAvailable = value;
 
                 base.OnPropertyChanged("IsEverythingAvailable");
+            }
+        }
+
+        private List<string> parameters;
+        public List<string> Parameters
+        {
+            get { return parameters; }
+            set
+            {
+                if (value == parameters)
+                    return;
+
+                parameters = value;
+
+                base.OnPropertyChanged("Parameters");
+            }
+        }
+
+        public bool IsParametersEnabled
+        {
+            get { return IsParametersEnabled; }
+            set
+            {
+                if (value == IsParametersEnabled)
+                    return;
+
+                IsParametersEnabled = value;
+
+                base.OnPropertyChanged("IsParametersEnabled");
             }
         }
 
@@ -879,9 +990,23 @@ namespace dnGREP.WPF
         {
             if (obj is BookmarkViewModel other)
             {
-                return FilePattern == other.FilePattern &&
+                var versionOneMatch = FilePattern == other.FilePattern &&
                     SearchFor == other.SearchFor &&
                     ReplaceWith == other.ReplaceWith;
+
+                if (!(Parameters?.Any() ?? false))
+                {
+                    if (!(other.Parameters?.Any() ?? false))
+                    {
+                        return versionOneMatch;
+                    }
+                    return false;
+                }
+                else if (!(other.Parameters?.Any() ?? false))
+                {
+                    return false;
+                }
+                return Parameters.SequenceEqual(other.Parameters);
             }
             return false;
         }
@@ -894,6 +1019,17 @@ namespace dnGREP.WPF
                 hashCode = (hashCode * 397) ^ FilePattern.GetHashCode();
                 hashCode = (hashCode * 397) ^ SearchFor.GetHashCode();
                 hashCode = (hashCode * 397) ^ ReplaceWith.GetHashCode();
+                if (null != Parameters)
+                {
+                    foreach (var parameter in Parameters)
+                    {
+                        hashCode = (hashCode * 397) ^ parameter.GetHashCode();
+                    }
+                }
+                if (CloneIndex > 0)
+                {
+                    hashCode = (hashCode * 397) ^ CloneIndex.GetHashCode();
+                }
                 return hashCode;
             }
         }

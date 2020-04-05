@@ -107,13 +107,13 @@ namespace dnGREP.Common
         public Bookmark() { }
         public Bookmark(string searchFor, string replaceWith, string filePattern)
         {
-            Version = 2;
+            Version = 3;
             SearchPattern = searchFor;
             ReplacePattern = replaceWith;
             FileNames = filePattern;
         }
 
-        public int Version { get; set; } = 1;
+        public int Version { get; set; } = 2;
         public string Description { get; set; } = string.Empty;
 
         public SearchType TypeOfSearch { get; set; } = SearchType.PlainText;
@@ -136,7 +136,9 @@ namespace dnGREP.Common
         public bool IncludeArchive { get; set; }
         public int CodePage { get; set; } = -1;
         public List<string> FolderReferences { get; set; } = new List<string>();
+        public List<string> Parameters { get; set; } = new List<string>();
 
+        public int CloneIndex { get; set; }
 
         // do not write v2 properties if the user hasn't updated the bookmark
         public bool ShouldSerializeTypeOfFileSearch() { return Version > 1; }
@@ -155,14 +157,29 @@ namespace dnGREP.Common
         public bool ShouldSerializeIncludeArchive() { return Version > 1; }
         public bool ShouldSerializeCodePage() { return Version > 1; }
         public bool ShouldSerializeFolderReferences() { return Version > 1; }
+        public bool ShouldSerializeParameters() { return Version > 2; }
+
 
         public override bool Equals(object obj)
         {
             if (obj is Bookmark otherBookmark)
             {
-                return FileNames == otherBookmark.FileNames &&
+                var versionOneMatch = FileNames == otherBookmark.FileNames &&
                     SearchPattern == otherBookmark.SearchPattern &&
                     ReplacePattern == otherBookmark.ReplacePattern;
+                if(!(Parameters?.Any() ?? false))
+                {
+                    if(!(otherBookmark.Parameters?.Any() ?? false))
+                    {
+                        return versionOneMatch;
+                    }
+                    return false;
+                }
+                else if(!(otherBookmark.Parameters?.Any() ?? false))
+                {
+                    return false;
+                }
+                return Parameters.SequenceEqual(otherBookmark.Parameters);
             }
             return false;
         }
@@ -175,6 +192,17 @@ namespace dnGREP.Common
                 hashCode = (hashCode * 397) ^ FileNames.GetHashCode();
                 hashCode = (hashCode * 397) ^ SearchPattern.GetHashCode();
                 hashCode = (hashCode * 397) ^ ReplacePattern.GetHashCode();
+                if(null != Parameters)
+                {
+                    foreach(var parameter in Parameters)
+                    {
+                        hashCode = (hashCode * 397) ^ parameter.GetHashCode();
+                    }
+                }
+                if(CloneIndex > 0)
+                {
+                    hashCode = (hashCode * 397) ^ CloneIndex.GetHashCode();
+                }
                 return hashCode;
             }
         }

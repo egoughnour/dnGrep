@@ -75,7 +75,17 @@ namespace dnGREP.WPF
                 var e = new PropertyChangedEventArgs(propertyName);
                 handler(this, e);
             }
+            AnyPropertyChange();
         }
+
+        /// <summary>
+        /// For any tracked property update this method will execute
+        /// </summary>
+        protected virtual void AnyPropertyChange()
+        {
+
+        }
+
 
         /// <summary>
         /// Get the string name for the property
